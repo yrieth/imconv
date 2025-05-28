@@ -1,46 +1,61 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
-
-pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // Don't forget to flush!
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "use other module" {
-    try std.testing.expectEqual(@as(i32, 150), lib.add(100, 50));
-}
-
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
-    };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
-
 const std = @import("std");
 
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const lib = @import("imconv_lib");
+pub fn main() !void {
+    //Alloc
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    //Getting args
+    const args = try std.process.argsAlloc(allocator);
+
+    //Proc args
+    if (args.len != 3 or args[1][0] != '-') {
+        std.debug.print("Wrong args", .{});
+        return;
+    }
+
+    const path1 = args[2];
+    const ext: []u8 = getExt(args[1][1]);
+
+    if (ext[0] == 'I') {
+        std.debug.print("Invalid Format", .{});
+        return;
+    }
+
+    var dotPoint: u8 = 0;
+    for (path1, 0..) |char, i| {
+        if (char == '.') {
+            dotPoint = @intCast(i);
+            break;
+        }
+    }
+
+    if (dotPoint == 0) {
+        std.debug.print("Invalid File Name", .{});
+        return;
+    }
+
+    var path2: [20]u8 = undefined;
+    var istart: u8 = 0;
+    for (istart..dotPoint) |i| {
+        path2[i] = path1[i];
+    }
+    path2[dotPoint] = '.';
+    istart = dotPoint + 1;
+    for (ext) |char| {
+        path2[istart] = char;
+        istart += 1;
+    }
+    for (istart..20) |i| {
+        path2[i] = 1;
+    }
+    std.debug.print("{s}", .{path2});
+}
+pub fn getExt(args: u8) []u8 {
+    return @constCast(switch (args) {
+        't' => "txt",
+        'p' => "png",
+        else => "Invalid",
+    });
+}
